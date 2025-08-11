@@ -4,7 +4,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Coffee + 9-Smoke (MindAR)</title>
 
-  <!-- A-Frame + MindAR -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
@@ -14,7 +13,6 @@
             color:#fff;font:600 16px system-ui;z-index:99;background:#000;transition:opacity .4s}
   </style>
 
-  <!-- Luma-key video component (keys out dark/black in fragment shader) -->
   <script>
     AFRAME.registerComponent('luma-key-video', {
       schema:{src:{type:'string'},threshold:{default:0.22},softness:{default:0.16},loop:{default:true},muted:{default:true}},
@@ -23,7 +21,7 @@
         const vid=document.createElement('video');
         vid.src=this.data.src;
         vid.crossOrigin='anonymous';
-        vid.playsInline=true;   // iOS inline
+        vid.playsInline=true;
         vid.muted=this.data.muted;
         vid.loop=this.data.loop;
         vid.preload='auto';
@@ -34,49 +32,24 @@
         tex.colorSpace=THREE.SRGBColorSpace;
 
         const mat=new THREE.ShaderMaterial({
-          uniforms:{
-            map:{value:tex},
-            uThreshold:{value:this.data.threshold},
-            uSoftness:{value:this.data.softness}
-          },
-          vertexShader:`
-            varying vec2 vUv;
-            void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }
-          `,
-          fragmentShader:`
-            uniform sampler2D map;
-            uniform float uThreshold;
-            uniform float uSoftness;
-            varying vec2 vUv;
-            void main(){
-              vec4 c = texture2D(map, vUv);
-              float luma = dot(c.rgb, vec3(0.2126,0.7152,0.0722));
-              float a = smoothstep(uThreshold - uSoftness, uThreshold + uSoftness, luma);
-              gl_FragColor = vec4(c.rgb, a);
-            }
-          `,
-          transparent:true,
-          depthWrite:false
+          uniforms:{ map:{value:tex}, uThreshold:{value:this.data.threshold}, uSoftness:{value:this.data.softness} },
+          vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+          fragmentShader:`uniform sampler2D map; uniform float uThreshold; uniform float uSoftness; varying vec2 vUv;
+            void main(){ vec4 c=texture2D(map,vUv); float luma=dot(c.rgb,vec3(0.2126,0.7152,0.0722));
+            float a=smoothstep(uThreshold-uSoftness,uThreshold+uSoftness,luma); gl_FragColor=vec4(c.rgb,a); }`,
+          transparent:true, depthWrite:false
         });
         this.tex=tex; this.mat=mat;
 
-        const apply=()=>{
-          const mesh=el.getObject3D('mesh'); if(!mesh) return;
-          mesh.traverse(n=>{ if(n.isMesh){ n.material=this.mat; }});
-        };
-        if(el.getObject3D('mesh')) apply();
-        else el.addEventListener('object3dset', e=>{ if(e.detail.type==='mesh') apply(); });
+        const apply=()=>{ const mesh=el.getObject3D('mesh'); if(!mesh) return;
+          mesh.traverse(n=>{ if(n.isMesh) n.material=this.mat; }); };
+        if(el.getObject3D('mesh')) apply(); else el.addEventListener('object3dset', e=>{ if(e.detail.type==='mesh') apply(); });
 
-        // try to comply with iOS autoplay quirks
         const startVideo=()=>{ vid.play().catch(()=>{}); };
         window.addEventListener('touchstart', startVideo, {once:true});
         vid.addEventListener('loadeddata', startVideo);
       },
-      remove(){
-        this.video && this.video.pause();
-        this.tex && this.tex.dispose();
-        this.mat && this.mat.dispose();
-      }
+      remove(){ this.video&&this.video.pause(); this.tex&&this.tex.dispose(); this.mat&&this.mat.dispose(); }
     });
   </script>
 </head>
@@ -85,7 +58,7 @@
   <div id="loader">Loading coffee + smoke…</div>
 
   <a-scene
-    mindar-image="imageTargetSrc: targets/NDCard.mind;"   <!-- your .mind file -->
+    mindar-image="imageTargetSrc: Target/paris.mind;"  <!-- ✅ your target file -->
     color-space="sRGB"
     embedded
     renderer="colorManagement:true; physicallyCorrectLights:true; antialias:true"
@@ -93,93 +66,68 @@
     device-orientation-permission-ui="enabled:false">
 
     <a-assets>
-      <!-- cup + videos (paths based on your GitHub tree) -->
       <a-asset-item id="cup" src="coffeemodel/Coffeemug.glb"></a-asset-item>
-      <!-- If you have a 2nd clip, add it. If not, we’ll reuse nine.mp4 for both layers -->
+
+      <!-- If you only have nine.mp4, it will be used for both layers -->
       <video id="smokeA" src="videos/nine.mp4" crossorigin="anonymous" playsinline muted loop></video>
       <video id="smokeB" src="videos/nine2.mp4" crossorigin="anonymous" playsinline muted loop></video>
-      <!-- optional target image to visualize card -->
-      <!-- <img id="card" src="yourCardPreview.png"> -->
     </a-assets>
 
-    <!-- simple lights -->
     <a-entity light="type:ambient; intensity:0.9"></a-entity>
     <a-entity light="type:directional; intensity:0.8" position="0 2 1"></a-entity>
 
     <a-camera look-controls="enabled:false"></a-camera>
 
-    <!-- Anchor everything to the tracked image -->
     <a-entity mindar-image-target="targetIndex: 0">
+      <a-entity id="mug" gltf-model="#cup" position="0 0 0" rotation="0 0 0" scale="0.6 0.6 0.6"></a-entity>
 
-      <!-- Coffee cup -->
-      <a-entity id="mug"
-                gltf-model="#cup"
-                position="0 0 0"
-                rotation="0 0 0"
-                scale="0.6 0.6 0.6">
-      </a-entity>
-
-      <!-- Smoke planes: stack 2 layers for depth. Adjust width/height/position to taste -->
-      <!-- Layer 1 (hero) -->
-      <a-plane id="smoke1"
-               width="0.22" height="0.32"
-               position="0 0.17 0.01"     <!-- slightly above rim -->
-               rotation="0 0 0"
-               material="transparent:true; opacity:0.9">
-      </a-plane>
-
-      <!-- Layer 2 (haze), a bit behind and offset in time -->
-      <a-plane id="smoke2"
-               width="0.26" height="0.36"
-               position="0 0.185 -0.005"
-               rotation="0 0 0"
-               material="transparent:true; opacity:0.6">
-      </a-plane>
-
+      <!-- Smoke planes -->
+      <a-plane id="smoke1" width="0.22" height="0.32" position="0 0.17 0.01"
+               material="transparent:true; opacity:0.9"></a-plane>
+      <a-plane id="smoke2" width="0.26" height="0.36" position="0 0.185 -0.005"
+               material="transparent:true; opacity:0.6"></a-plane>
     </a-entity>
   </a-scene>
 
   <script>
-    // hide loader once scene boots
-    const scene = document.querySelector('a-scene');
-    const loader = document.getElementById('loader');
-    const hideLoader = ()=>{ loader.style.opacity='0'; setTimeout(()=>loader.remove(), 400); };
+    const scene=document.querySelector('a-scene');
+    const loader=document.getElementById('loader');
+    const hideLoader=()=>{ loader.style.opacity='0'; setTimeout(()=>loader.remove(),400); };
     scene.hasLoaded ? hideLoader() : scene.addEventListener('loaded', hideLoader);
 
-    // Attach luma key once assets are ready
     scene.addEventListener('loaded', ()=>{
-      const s1 = document.getElementById('smoke1');
-      const s2 = document.getElementById('smoke2');
-      const smokeA = document.getElementById('smokeA')?.src || 'videos/nine.mp4';
-      const smokeB = document.getElementById('smokeB')?.src || 'videos/nine.mp4';
+      const s1=document.getElementById('smoke1');
+      const s2=document.getElementById('smoke2');
 
-      // luma key both layers (black → transparent)
+      // use smokeB if it exists, else reuse smokeA
+      const smokeAEl=document.getElementById('smokeA');
+      const smokeBEl=document.getElementById('smokeB');
+      const smokeA= smokeAEl ? smokeAEl.src : 'videos/nine.mp4';
+      const smokeB= smokeBEl && smokeBEl.getAttribute('src') ? smokeBEl.src : smokeA;
+
       s1.setAttribute('luma-key-video', `src:${smokeA}; threshold:0.22; softness:0.16`);
-      // slight desync so they don’t move identically
       setTimeout(()=> s2.setAttribute('luma-key-video', `src:${smokeB}; threshold:0.22; softness:0.16`), 400);
 
-      // tiny idle motion so it feels alive
-      const wobble = (el, spin=12, bobAmp=0.01, bobSecs=3)=>{
-        const start=performance.now();
-        const baseY=el.object3D.position.y;
-        (function loop(t){
-          const dt=(t-start)/1000;
+      // subtle motion
+      const wobble=(el,spin=12,bobAmp=0.01,bobSecs=3)=>{
+        const start=performance.now(); const baseY=el.object3D.position.y;
+        (function loop(t){ const dt=(t-start)/1000;
           el.object3D.rotation.z = Math.sin(dt*(2*Math.PI/spin))*0.03;
           el.object3D.position.y = baseY + Math.sin(dt*(2*Math.PI/bobSecs))*bobAmp;
           requestAnimationFrame(loop);
         })(start);
       };
-      wobble(s1, 14, 0.008, 3.5);
-      wobble(s2, 10, 0.012, 2.8);
+      wobble(s1,14,0.008,3.5); wobble(s2,10,0.012,2.8);
 
-      // Make sure iOS actually starts the videos once the target is found
-      const target = document.querySelector('[mindar-image-target]');
+      // ensure playback after target lock (good for iOS)
+      const target=document.querySelector('[mindar-image-target]');
       target.addEventListener('targetFound', ()=>{
-        const vEls = [s1.components['luma-key-video']?.video,
-                      s2.components['luma-key-video']?.video].filter(Boolean);
-        vEls.forEach(v=> v.play().catch(()=>{}));
+        [s1.components['luma-key-video']?.video, s2.components['luma-key-video']?.video]
+          .filter(Boolean).forEach(v=>v.play().catch(()=>{}));
       });
     });
   </script>
 </body>
 </html>
+
+
