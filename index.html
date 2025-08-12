@@ -8,14 +8,45 @@
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
-    body{margin:0;overflow:hidden;background:#000}
-    #loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-            color:#fff;font:600 16px system-ui;z-index:99;background:#000;transition:opacity .4s}
+    /* White page + clean look (like Mona) */
+    body { margin:0; overflow:hidden; background:#fff; }
+
+    .ar-scene-container { width:100vw; height:100vh; position:relative; }
+
+    /* Tap overlay for redirect */
+    #tap-catcher {
+      position:fixed; inset:0; z-index:999; display:none;
+    }
+
+    /* Front loader (white) */
+    #loader {
+      position:fixed; inset:0; background:#fff; display:flex; flex-direction:column;
+      justify-content:center; align-items:center; z-index:9999; transition:opacity .5s ease;
+    }
+    #nd-logo {
+      width:220px; opacity:0;
+      animation:fadeInLogo 1s ease-out forwards, glow 3s ease-in-out 1.2s infinite, float 4s ease-in-out 1.2s infinite;
+    }
+    .powered-by {
+      color:#000; font:15px sans-serif; opacity:0; margin-top:12px;
+      animation:fadeInText 1s ease-out forwards; animation-delay:1.2s;
+    }
+    @keyframes fadeInLogo { to { opacity:1 } }
+    @keyframes fadeInText { to { opacity:1 } }
+    @keyframes glow {
+      0%,100%{ filter:drop-shadow(0 0 8px rgba(0,255,255,.25)) }
+      50%    { filter:drop-shadow(0 0 12px rgba(0,255,255,.6)) }
+    }
+    @keyframes float {
+      0%,100%{ transform:translateY(0) }
+      50%    { transform:translateY(-6px) }
+    }
   </style>
 
+  <!-- Luma key component (coffee code) -->
   <script>
     AFRAME.registerComponent('luma-key-video', {
-      schema:{src:{type:'string'},threshold:{default:0.22},softness:{default:0.16},loop:{default:true},muted:{default:true}},
+      schema:{src:{type:'string'}, threshold:{default:0.22}, softness:{default:0.16}, loop:{default:true}, muted:{default:true}},
       init(){
         const el=this.el;
         const vid=document.createElement('video');
@@ -37,13 +68,15 @@
           fragmentShader:`uniform sampler2D map; uniform float uThreshold; uniform float uSoftness; varying vec2 vUv;
             void main(){ vec4 c=texture2D(map,vUv); float luma=dot(c.rgb,vec3(0.2126,0.7152,0.0722));
             float a=smoothstep(uThreshold-uSoftness,uThreshold+uSoftness,luma); gl_FragColor=vec4(c.rgb,a); }`,
-          transparent:true, depthWrite:false
+          transparent:true,
+          depthWrite:false
         });
         this.tex=tex; this.mat=mat;
 
         const apply=()=>{ const mesh=el.getObject3D('mesh'); if(!mesh) return;
-          mesh.traverse(n=>{ if(n.isMesh) n.material=this.mat; }); };
-        if(el.getObject3D('mesh')) apply(); else el.addEventListener('object3dset', e=>{ if(e.detail.type==='mesh') apply(); });
+          mesh.traverse(n=>{ if(n.isMesh) n.material=this.mat; });
+        };
+        el.getObject3D('mesh') ? apply() : el.addEventListener('object3dset', e=>{ if(e.detail.type==='mesh') apply(); });
 
         const startVideo=()=>{ vid.play().catch(()=>{}); };
         window.addEventListener('touchstart', startVideo, {once:true});
@@ -55,56 +88,85 @@
 </head>
 
 <body>
-  <div id="loader">Loading coffee + smoke…</div>
+  <!-- Front Loader -->
+  <div id="loader">
+    <!-- use your hosted PNG or switch src to 'png/ndelogo.png' in your repo -->
+    <img id="nd-logo" src="png/ndelogo.png" alt="Neon Doorway Logo">
+    <p class="powered-by">Powered by Neon Doorway</p>
+  </div>
 
-  <!-- ✅ your target file -->
-  <a-scene
-    mindar-image="imageTargetSrc: Target/paris.mind;"
-    color-space="sRGB"
-    embedded
-    renderer="colorManagement:true; physicallyCorrectLights:true; antialias:true"
-    vr-mode-ui="enabled:false"
-    device-orientation-permission-ui="enabled:false">
+  <!-- Redirect overlay -->
+  <div id="tap-catcher"></div>
 
-    <a-assets>
-      <a-asset-item id="cup" src="coffeemodel/Coffeemug.glb"></a-asset-item>
-      <video id="smokeA" src="videos/nine.mp4" crossorigin="anonymous" playsinline muted loop></video>
-      <video id="smokeB" src="videos/nine2.mp4" crossorigin="anonymous" playsinline muted loop></video>
-    </a-assets>
+  <!-- AR Experience -->
+  <div class="ar-scene-container">
+    <a-scene id="scene"
+      mindar-image="imageTargetSrc: Target/paris.mind; uiScanning:false;"
+      color-space="sRGB"
+      renderer="colorManagement: true; physicallyCorrectLights: true"
+      vr-mode-ui="enabled:false"
+      device-orientation-permission-ui="enabled:false"
+      style="visibility:hidden;">
 
-    <a-entity light="type:ambient; intensity:0.9"></a-entity>
-    <a-entity light="type:directional; intensity:0.8" position="0 2 1"></a-entity>
+      <a-assets>
+        <!-- Coffee cup GLB (coffee code) -->
+        <a-asset-item id="cup" src="coffeemodel/Coffeemug.glb"></a-asset-item>
+        <!-- Smoke clips: if nine2.mp4 missing, code reuses nine.mp4 -->
+        <video id="smokeA" src="videos/nine.mp4" crossorigin="anonymous" playsinline muted loop></video>
+        <video id="smokeB" src="videos/nine2.mp4" crossorigin="anonymous" playsinline muted loop></video>
+      </a-assets>
 
-    <a-camera look-controls="enabled:false"></a-camera>
+      <a-camera position="0 0 0" look-controls="enabled:false"></a-camera>
 
-    <a-entity mindar-image-target="targetIndex: 0">
-      <a-entity id="mug" gltf-model="#cup" position="0 0 0" rotation="0 0 0" scale="0.6 0.6 0.6"></a-entity>
+      <!-- Lighting -->
+      <a-entity light="type:ambient; intensity:0.9"></a-entity>
+      <a-entity light="type:directional; intensity:0.8" position="0 2 1"></a-entity>
 
-      <!-- Smoke planes -->
-      <a-plane id="smoke1" width="0.22" height="0.32" position="0 0.335 0.01"
-               material="transparent:true; opacity:0.9"></a-plane>
-      <a-plane id="smoke2" width="0.26" height="0.36" position="0 0.350 -0.005"
-               material="transparent:true; opacity:0.9"></a-plane>
-    </a-entity>
-  </a-scene>
+      <!-- Target root -->
+      <a-entity mindar-image-target="targetIndex: 0">
+
+        <!-- Cup (dimensions from coffee code) -->
+        <a-entity id="mug" gltf-model="#cup" position="0 0 0" rotation="0 0 0" scale="0.6 0.6 0.6"></a-entity>
+
+        <!-- Smoke planes (coffee positions/sizes) -->
+        <a-plane id="smoke1" width="0.22" height="0.32" position="0 0.335 0.01"
+                 material="transparent:true; opacity:0.9"></a-plane>
+
+        <a-plane id="smoke2" width="0.26" height="0.36" position="0 0.350 -0.005"
+                 material="transparent:true; opacity:0.9"></a-plane>
+
+      </a-entity>
+    </a-scene>
+  </div>
 
   <script>
-    const scene=document.querySelector('a-scene');
-    const loader=document.getElementById('loader');
-    const hideLoader=()=>{ loader.style.opacity='0'; setTimeout(()=>loader.remove(),400); };
-    scene.hasLoaded ? hideLoader() : scene.addEventListener('loaded', hideLoader);
+    // Kick off target download early (like Mona)
+    fetch('Target/paris.mind');
 
-    scene.addEventListener('loaded', ()=>{
-      const s1=document.getElementById('smoke1');
-      const s2=document.getElementById('smoke2');
+    const scene = document.getElementById('scene');
+    const loader = document.getElementById('loader');
+    const tapCatcher = document.getElementById('tap-catcher');
 
-      const smokeAEl=document.getElementById('smokeA');
-      const smokeBEl=document.getElementById('smokeB');
-      const smokeA= smokeAEl ? smokeAEl.src : 'videos/nine.mp4';
-      const smokeB= smokeBEl && smokeBEl.getAttribute('src') ? smokeBEl.src : smokeA;
+    // Hide loader on AR ready; reveal scene (Mona behavior)
+    scene.addEventListener('arReady', () => {
+      loader.style.opacity = '0';
+      setTimeout(() => {
+        loader.style.display = 'none';
+        scene.style.visibility = 'visible';
+      }, 500);
+    });
 
-      s1.setAttribute('luma-key-video', `src:${smokeA}; threshold:0.22; softness:0.16`);
-      setTimeout(()=> s2.setAttribute('luma-key-video', `src:${smokeB}; threshold:0.22; softness:0.16`), 400);
+    // Coffee behavior: attach keyer + subtle motion
+    scene.addEventListener('loaded', () => {
+      const s1 = document.getElementById('smoke1');
+      const s2 = document.getElementById('smoke2');
+      const v1 = document.getElementById('smokeA');
+      const v2 = document.getElementById('smokeB');
+      const src1 = v1 ? v1.src : 'videos/nine.mp4';
+      const src2 = (v2 && v2.getAttribute('src')) ? v2.src : src1;
+
+      s1.setAttribute('luma-key-video', `src:${src1}; threshold:0.22; softness:0.16`);
+      setTimeout(()=> s2.setAttribute('luma-key-video', `src:${src2}; threshold:0.22; softness:0.16`), 400);
 
       const wobble=(el,spin=12,bobAmp=0.01,bobSecs=3)=>{
         const start=performance.now(); const baseY=el.object3D.position.y;
@@ -114,17 +176,32 @@
           requestAnimationFrame(loop);
         })(start);
       };
-      wobble(s1,14,0.008,3.5); wobble(s2,10,0.012,2.8);
+      wobble(s1,14,0.008,3.5);
+      wobble(s2,10,0.012,2.8);
+    });
 
-      const target=document.querySelector('[mindar-image-target]');
-      target.addEventListener('targetFound', ()=>{
-        [s1.components['luma-key-video']?.video, s2.components['luma-key-video']?.video]
-          .filter(Boolean).forEach(v=>v.play().catch(()=>{}));
-      });
+    // Tap redirect + play/pause on target events (Mona behavior, applied to coffee videos)
+    const target = document.querySelector('[mindar-image-target]');
+    target.addEventListener('targetFound', () => {
+      tapCatcher.style.display = 'block';
+      const vA = document.getElementById('smoke1').components['luma-key-video']?.video;
+      const vB = document.getElementById('smoke2').components['luma-key-video']?.video;
+      [vA, vB].filter(Boolean).forEach(v => v.play().catch(()=>{}));
+    });
+    target.addEventListener('targetLost', () => {
+      tapCatcher.style.display = 'none';
+      const vA = document.getElementById('smoke1').components['luma-key-video']?.video;
+      const vB = document.getElementById('smoke2').components['luma-key-video']?.video;
+      [vA, vB].filter(Boolean).forEach(v => v.pause());
+    });
+    tapCatcher.addEventListener('click', () => {
+      window.location.href = 'https://www.neondoorway.com/flashar';
     });
   </script>
 </body>
 </html>
+
+
 
 
 
