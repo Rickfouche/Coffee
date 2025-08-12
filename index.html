@@ -2,35 +2,41 @@
 <html lang="en">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Coffee + 9-Smoke (MindAR)</title>
+  <title>Cafe Noir (MindAR)</title>
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
     body{margin:0;overflow:hidden;background:#000}
-    #loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-            color:#fff;font:600 16px system-ui;z-index:99;background:#000;transition:opacity .4s}
+
+    /* Front loader */
+    #loader{
+      position:fixed;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;background:#000;z-index:9999;
+      transition:opacity .5s ease;
+    }
+    #nd-logo{width:220px;opacity:0;animation:fadeIn 1s forwards, glow 3s 1.2s infinite, float 4s 1.2s infinite;}
+    .powered-by{color:#fff;font:15px/1.2 system-ui;margin-top:12px;opacity:0;animation:fadeIn 1s forwards;animation-delay:1.2s;}
+    @keyframes fadeIn{to{opacity:1}}
+    @keyframes glow{0%,100%{filter:drop-shadow(0 0 8px rgba(0,255,255,.25))}50%{filter:drop-shadow(0 0 12px rgba(0,255,255,.6))}}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+    /* Click overlay */
+    #tap-catcher{position:fixed;inset:0;display:none;z-index:999}
   </style>
 
+  <!-- Luma key component -->
   <script>
     AFRAME.registerComponent('luma-key-video', {
       schema:{src:{type:'string'},threshold:{default:0.22},softness:{default:0.16},loop:{default:true},muted:{default:true}},
       init(){
-        const el=this.el;
-        const vid=document.createElement('video');
-        vid.src=this.data.src;
-        vid.crossOrigin='anonymous';
-        vid.playsInline=true;
-        vid.muted=this.data.muted;
-        vid.loop=this.data.loop;
-        vid.preload='auto';
-        vid.autoplay=true;
+        const el=this.el, vid=document.createElement('video');
+        vid.src=this.data.src; vid.crossOrigin='anonymous'; vid.playsInline=true;
+        vid.muted=this.data.muted; vid.loop=this.data.loop; vid.preload='auto'; vid.autoplay=true;
         this.video=vid;
 
-        const tex=new THREE.VideoTexture(vid);
-        tex.colorSpace=THREE.SRGBColorSpace;
-
+        const tex=new THREE.VideoTexture(vid); tex.colorSpace=THREE.SRGBColorSpace;
         const mat=new THREE.ShaderMaterial({
           uniforms:{ map:{value:tex}, uThreshold:{value:this.data.threshold}, uSoftness:{value:this.data.softness} },
           vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
@@ -43,11 +49,11 @@
 
         const apply=()=>{ const mesh=el.getObject3D('mesh'); if(!mesh) return;
           mesh.traverse(n=>{ if(n.isMesh) n.material=this.mat; }); };
-        if(el.getObject3D('mesh')) apply(); else el.addEventListener('object3dset', e=>{ if(e.detail.type==='mesh') apply(); });
+        el.getObject3D('mesh') ? apply() : el.addEventListener('object3dset', e=>{ if(e.detail.type==='mesh') apply(); });
 
-        const startVideo=()=>{ vid.play().catch(()=>{}); };
-        window.addEventListener('touchstart', startVideo, {once:true});
-        vid.addEventListener('loadeddata', startVideo);
+        const start=()=>vid.play().catch(()=>{});
+        window.addEventListener('touchstart', start, {once:true});
+        vid.addEventListener('loadeddata', start);
       },
       remove(){ this.video&&this.video.pause(); this.tex&&this.tex.dispose(); this.mat&&this.mat.dispose(); }
     });
@@ -55,20 +61,28 @@
 </head>
 
 <body>
-  <div id="loader">Loading coffee + smoke…</div>
+  <!-- Front Loader (uses your repo PNG) -->
+  <div id="loader">
+    <img id="nd-logo" src="png/ndelogo.png" alt="Neon Doorway Logo">
+    <p class="powered-by">Powered by Neon Doorway</p>
+  </div>
 
-  <a-scene
-    mindar-image="imageTargetSrc: Target/paris.mind;"  <!-- ✅ your target file -->
+  <!-- Tap-to-redirect overlay -->
+  <div id="tap-catcher"></div>
+
+  <!-- AR Scene (hidden until arReady) -->
+  <a-scene id="scene"
+    mindar-image="imageTargetSrc: Target/paris.mind; uiScanning:false;"
     color-space="sRGB"
     embedded
     renderer="colorManagement:true; physicallyCorrectLights:true; antialias:true"
     vr-mode-ui="enabled:false"
-    device-orientation-permission-ui="enabled:false">
+    device-orientation-permission-ui="enabled:false"
+    style="visibility:hidden">
 
     <a-assets>
       <a-asset-item id="cup" src="coffeemodel/Coffeemug.glb"></a-asset-item>
-
-      <!-- If you only have nine.mp4, it will be used for both layers -->
+      <!-- If nine2.mp4 doesn't exist, JS will reuse nine.mp4 -->
       <video id="smokeA" src="videos/nine.mp4" crossorigin="anonymous" playsinline muted loop></video>
       <video id="smokeB" src="videos/nine2.mp4" crossorigin="anonymous" playsinline muted loop></video>
     </a-assets>
@@ -81,7 +95,7 @@
     <a-entity mindar-image-target="targetIndex: 0">
       <a-entity id="mug" gltf-model="#cup" position="0 0 0" rotation="0 0 0" scale="0.6 0.6 0.6"></a-entity>
 
-      <!-- Smoke planes -->
+      <!-- Smoke planes (raise/lower Y to place above rim) -->
       <a-plane id="smoke1" width="0.22" height="0.32" position="0 0.335 0.01"
                material="transparent:true; opacity:0.9"></a-plane>
       <a-plane id="smoke2" width="0.26" height="0.36" position="0 0.350 -0.005"
@@ -90,25 +104,34 @@
   </a-scene>
 
   <script>
-    const scene=document.querySelector('a-scene');
-    const loader=document.getElementById('loader');
-    const hideLoader=()=>{ loader.style.opacity='0'; setTimeout(()=>loader.remove(),400); };
-    scene.hasLoaded ? hideLoader() : scene.addEventListener('loaded', hideLoader);
+    // Preload the .mind to kick the network early
+    fetch('Target/paris.mind');
 
-    scene.addEventListener('loaded', ()=>{
-      const s1=document.getElementById('smoke1');
-      const s2=document.getElementById('smoke2');
+    const scene = document.getElementById('scene');
+    const loader = document.getElementById('loader');
+    const tapCatcher = document.getElementById('tap-catcher');
 
-      // use smokeB if it exists, else reuse smokeA
-      const smokeAEl=document.getElementById('smokeA');
-      const smokeBEl=document.getElementById('smokeB');
-      const smokeA= smokeAEl ? smokeAEl.src : 'videos/nine.mp4';
-      const smokeB= smokeBEl && smokeBEl.getAttribute('src') ? smokeBEl.src : smokeA;
+    // When MindAR is ready, hide loader and reveal scene
+    scene.addEventListener('arReady', () => {
+      loader.style.opacity = '0';
+      setTimeout(() => {
+        loader.style.display = 'none';
+        scene.style.visibility = 'visible';
+      }, 500);
+    });
 
-      s1.setAttribute('luma-key-video', `src:${smokeA}; threshold:0.22; softness:0.16`);
-      setTimeout(()=> s2.setAttribute('luma-key-video', `src:${smokeB}; threshold:0.22; softness:0.16`), 400);
+    // Hook up videos / motion once scene loads
+    scene.addEventListener('loaded', () => {
+      const s1 = document.getElementById('smoke1');
+      const s2 = document.getElementById('smoke2');
+      const v1 = document.getElementById('smokeA');
+      const v2 = document.getElementById('smokeB');
+      const src1 = v1 ? v1.src : 'videos/nine.mp4';
+      const src2 = (v2 && v2.getAttribute('src')) ? v2.src : src1;
 
-      // subtle motion
+      s1.setAttribute('luma-key-video', `src:${src1}; threshold:0.22; softness:0.16`);
+      setTimeout(()=> s2.setAttribute('luma-key-video', `src:${src2}; threshold:0.22; softness:0.16`), 400);
+
       const wobble=(el,spin=12,bobAmp=0.01,bobSecs=3)=>{
         const start=performance.now(); const baseY=el.object3D.position.y;
         (function loop(t){ const dt=(t-start)/1000;
@@ -117,18 +140,31 @@
           requestAnimationFrame(loop);
         })(start);
       };
-      wobble(s1,14,0.008,3.5); wobble(s2,10,0.012,2.8);
+      wobble(s1,14,0.008,3.5);
+      wobble(s2,10,0.012,2.8);
+    });
 
-      // ensure playback after target lock (good for iOS)
-      const target=document.querySelector('[mindar-image-target]');
-      target.addEventListener('targetFound', ()=>{
-        [s1.components['luma-key-video']?.video, s2.components['luma-key-video']?.video]
-          .filter(Boolean).forEach(v=>v.play().catch(()=>{}));
-      });
+    // Show click layer when target found; play/pause videos; redirect on tap
+    const target = document.querySelector('[mindar-image-target]');
+    target.addEventListener('targetFound', () => {
+      tapCatcher.style.display = 'block';
+      const vA = document.getElementById('smoke1').components['luma-key-video']?.video;
+      const vB = document.getElementById('smoke2').components['luma-key-video']?.video;
+      [vA, vB].filter(Boolean).forEach(v => v.play().catch(()=>{}));
+    });
+    target.addEventListener('targetLost', () => {
+      tapCatcher.style.display = 'none';
+      const vA = document.getElementById('smoke1').components['luma-key-video']?.video;
+      const vB = document.getElementById('smoke2').components['luma-key-video']?.video;
+      [vA, vB].filter(Boolean).forEach(v => v.pause());
+    });
+    tapCatcher.addEventListener('click', () => {
+      window.location.href = 'https://www.neondoorway.com/flashar';
     });
   </script>
 </body>
 </html>
+
 
 
 
